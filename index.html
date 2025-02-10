@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Text to Speech Converter</title>
+    <title>Text to Speech Converter with Recording</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -42,45 +42,82 @@
             border-radius: 5px;
             cursor: pointer;
             transition: background-color 0.3s;
+            margin: 5px;
         }
         button:hover {
             background-color: #45a049;
+        }
+        #download-button {
+            display: none;
+            background-color: #008CBA;
+        }
+        #download-button:hover {
+            background-color: #007bb5;
         }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>Text to Speech Converter</h1>
+        <h1>Text to Speech Converter with Recording</h1>
         <textarea id="text-input" placeholder="Enter your text here..."></textarea>
         <br>
         <button onclick="convertToSpeech()">Convert to Speech</button>
+        <button id="download-button">Download Recording</button>
     </div>
 
     <script>
-        // Function to convert text to speech
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioBlob;
+        
+        async function startRecording() {
+            const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: false });
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = event => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
+            mediaRecorder.onstop = () => {
+                audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                document.getElementById('download-button').style.display = 'inline';
+            };
+            mediaRecorder.start();
+        }
+        
         function convertToSpeech() {
-            // Get the text from the textarea
             const text = document.getElementById('text-input').value;
-
-            // Check if text is empty
             if (text === '') {
                 alert('Please enter some text!');
                 return;
             }
-
-            // Create a new instance of SpeechSynthesisUtterance (part of Web Speech API)
             const speech = new SpeechSynthesisUtterance(text);
-
-            // Set options for the speech (optional)
-            speech.lang = 'en-US';  // Language, you can change to other languages (e.g., 'en-GB', 'es-ES')
-            speech.rate = 1;        // Speed of speech (1 is normal, 0.5 is slower, 1.5 is faster)
-            speech.pitch = 1;       // Pitch of the voice (1 is normal, 0 is low, 2 is high)
-
-            // Use the SpeechSynthesis API to speak the text
+            speech.lang = 'en-US';
+            speech.rate = 1;
+            speech.pitch = 1;
+            
+            speech.onstart = () => {
+                audioChunks = [];
+                startRecording();
+            };
+            
+            speech.onend = () => {
+                mediaRecorder.stop();
+            };
+            
             window.speechSynthesis.speak(speech);
         }
-    </script>
 
+        document.getElementById('download-button').addEventListener('click', () => {
+            const url = URL.createObjectURL(audioBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'recorded-speech.webm';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        });
+    </script>
 </body>
 </html>
