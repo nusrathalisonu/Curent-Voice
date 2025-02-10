@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Text to Speech Converter with Recording</title>
+    <title>Text to Speech with Recording</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -56,26 +56,7 @@
         let mediaRecorder;
         let audioChunks = [];
         let audioBlob;
-
-        async function startRecording() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                mediaRecorder = new MediaRecorder(stream);
-                mediaRecorder.ondataavailable = event => {
-                    if (event.data.size > 0) {
-                        audioChunks.push(event.data);
-                    }
-                };
-                mediaRecorder.onstop = () => {
-                    audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                    document.getElementById('download-button').style.display = 'inline';
-                };
-                mediaRecorder.start();
-            } catch (error) {
-                console.error("Recording error:", error);
-                alert("Recording not supported in this browser.");
-            }
-        }
+        let audioContext, mediaStreamDestination;
 
         function convertToSpeech() {
             const text = document.getElementById('text-input').value;
@@ -83,11 +64,43 @@
                 alert('Enter text first!');
                 return;
             }
-            const speech = new SpeechSynthesisUtterance(text);
-            speech.lang = 'en-US';
 
-            speech.onstart = startRecording;
-            speech.onend = () => mediaRecorder?.stop();
+            if (!audioContext) {
+                audioContext = new AudioContext();
+                mediaStreamDestination = audioContext.createMediaStreamDestination();
+            }
+
+            const speech = new SpeechSynthesisUtterance(text);
+            const utteranceVoice = speechSynthesis.getVoices().find(voice => voice.lang === 'en-US');
+            if (utteranceVoice) speech.voice = utteranceVoice;
+
+            const speechSynthesisUtterance = new SpeechSynthesisUtterance(text);
+            const utteranceAudioSource = audioContext.createMediaStreamSource(mediaStreamDestination.stream);
+
+            mediaRecorder = new MediaRecorder(mediaStreamDestination.stream);
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = event => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                document.getElementById('download-button').style.display = 'inline';
+            };
+
+            utteranceAudioSource.connect(audioContext.destination);
+            utteranceAudioSource.connect(mediaStreamDestination);
+
+            speech.onstart = () => {
+                mediaRecorder.start();
+            };
+
+            speech.onend = () => {
+                mediaRecorder.stop();
+            };
 
             window.speechSynthesis.speak(speech);
         }
