@@ -72,18 +72,28 @@
         let audioBlob;
         
         async function startRecording() {
-            const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: false });
-            mediaRecorder = new MediaRecorder(stream);
-            mediaRecorder.ondataavailable = event => {
-                if (event.data.size > 0) {
-                    audioChunks.push(event.data);
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                    alert("Screen recording with audio is not supported in this browser.");
+                    return;
                 }
-            };
-            mediaRecorder.onstop = () => {
-                audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                document.getElementById('download-button').style.display = 'inline';
-            };
-            mediaRecorder.start();
+
+                const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: false });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = event => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                mediaRecorder.onstop = () => {
+                    audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    document.getElementById('download-button').style.display = 'inline';
+                };
+                mediaRecorder.start();
+            } catch (error) {
+                console.error("Error starting recording:", error);
+                alert("Failed to start recording: " + error.message);
+            }
         }
         
         function convertToSpeech() {
@@ -103,7 +113,11 @@
             };
             
             speech.onend = () => {
-                mediaRecorder.stop();
+                if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                    mediaRecorder.stop();
+                } else {
+                    console.warn("mediaRecorder was not initialized or already stopped.");
+                }
             };
             
             window.speechSynthesis.speak(speech);
