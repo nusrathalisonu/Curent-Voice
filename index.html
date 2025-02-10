@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text to Speech Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f7f7f7;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            font-size: 16px;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Text to Speech Converter</h1>
+        <textarea id="text-input" placeholder="Enter your text here..."></textarea>
+        <br>
+        <button onclick="convertToSpeech()">Convert to Speech</button>
+    </div>
+
+    <script>
+        // Function to convert text to speech
+        function convertToSpeech() {
+            // Get the text from the textarea
+            const text = document.getElementById('text-input').value;
+
+            // Check if text is empty
+            if (text === '') {
+                alert('Please enter some text!');
+                return;
+            }
+
+            // Create a new instance of SpeechSynthesisUtterance (part of Web Speech API)
+            const speech = new SpeechSynthesisUtterance(text);
+
+            // Set options for the speech (optional)
+            speech.lang = 'en-US';  // Language, you can change to other languages (e.g., 'en-GB', 'es-ES')
+            speech.rate = 1;        // Speed of speech (1 is normal, 0.5 is slower, 1.5 is faster)
+            speech.pitch = 1;       // Pitch of the voice (1 is normal, 0 is low, 2 is high)
+
+            // Use the SpeechSynthesis API to speak the text
+            window.speechSynthesis.speak(speech);
+        }
+    </script>
+
+</body>
+</html>
