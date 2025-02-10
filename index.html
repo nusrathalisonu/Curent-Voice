@@ -53,9 +53,31 @@
     </div>
 
     <script>
+        let mediaRecorder;
+        let audioChunks = [];
         let audioBlob;
 
-        async function convertToSpeech() {
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = event => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                mediaRecorder.onstop = () => {
+                    audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    document.getElementById('download-button').style.display = 'inline';
+                };
+                mediaRecorder.start();
+            } catch (error) {
+                console.error("Recording error:", error);
+                alert("Recording is not supported in your browser.");
+            }
+        }
+
+        function convertToSpeech() {
             const text = document.getElementById('text-input').value;
             if (!text) {
                 alert('Enter text first!');
@@ -65,82 +87,18 @@
             const utterance = new SpeechSynthesisUtterance(text);
             utterance.lang = 'en-US';
 
-            const voices = speechSynthesis.getVoices();
-            utterance.voice = voices.find(voice => voice.lang === 'en-US') || voices[0];
-
-            const sampleRate = 44100;
-            const offlineContext = new OfflineAudioContext(1, sampleRate * 10, sampleRate);
-
-            const source = offlineContext.createBufferSource();
-            const mediaStreamDestination = offlineContext.createMediaStreamDestination();
-
-            source.connect(mediaStreamDestination);
-            source.connect(offlineContext.destination);
-
             utterance.onstart = () => {
-                console.log("Speech started...");
+                audioChunks = [];
+                startRecording();
             };
 
-            utterance.onend = async () => {
-                console.log("Speech ended, recording...");
-
-                const audioBuffer = await offlineContext.startRendering();
-                const wavBlob = bufferToWave(audioBuffer, audioBuffer.length);
-                audioBlob = new Blob([wavBlob], { type: 'audio/wav' });
-
-                document.getElementById('download-button').style.display = 'inline';
+            utterance.onend = () => {
+                if (mediaRecorder && mediaRecorder.state !== "inactive") {
+                    mediaRecorder.stop();
+                }
             };
 
             window.speechSynthesis.speak(utterance);
-        }
-
-        function bufferToWave(abuffer, len) {
-            let numOfChan = abuffer.numberOfChannels;
-            let length = len * numOfChan * 2 + 44;
-            let buffer = new ArrayBuffer(length);
-            let view = new DataView(buffer);
-            let channels = [], i, sample, offset = 0, pos = 0;
-
-            setUint32(0x46464952); // "RIFF"
-            setUint32(length - 8); // file length
-            setUint32(0x45564157); // "WAVE"
-
-            setUint32(0x20746d66); // "fmt " chunk
-            setUint32(16);         // length = 16
-            setUint16(1);          // PCM (uncompressed)
-            setUint16(numOfChan);
-            setUint32(abuffer.sampleRate);
-            setUint32(abuffer.sampleRate * 2 * numOfChan);
-            setUint16(numOfChan * 2);
-            setUint16(16);         // bits per sample
-
-            setUint32(0x64617461); // "data" - chunk
-            setUint32(length - pos - 4);
-
-            for (i = 0; i < abuffer.numberOfChannels; i++)
-                channels.push(abuffer.getChannelData(i));
-
-            while (pos < length) {
-                for (i = 0; i < numOfChan; i++) {
-                    sample = Math.max(-1, Math.min(1, channels[i][offset])); 
-                    sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF; 
-                    view.setInt16(pos, sample, true); 
-                    pos += 2;
-                }
-                offset++;
-            }
-
-            return buffer;
-
-            function setUint16(data) {
-                view.setUint16(pos, data, true);
-                pos += 2;
-            }
-
-            function setUint32(data) {
-                view.setUint32(pos, data, true);
-                pos += 4;
-            }
         }
 
         document.getElementById('download-button').addEventListener('click', () => {
