@@ -53,63 +53,101 @@
     </div>
 
     <script>
-        let mediaRecorder;
-        let audioChunks = [];
         let audioBlob;
-        let audioContext, mediaStreamDestination;
 
-        function convertToSpeech() {
+        async function convertToSpeech() {
             const text = document.getElementById('text-input').value;
             if (!text) {
                 alert('Enter text first!');
                 return;
             }
 
-            if (!audioContext) {
-                audioContext = new AudioContext();
-                mediaStreamDestination = audioContext.createMediaStreamDestination();
-            }
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'en-US';
 
-            const speech = new SpeechSynthesisUtterance(text);
-            const utteranceVoice = speechSynthesis.getVoices().find(voice => voice.lang === 'en-US');
-            if (utteranceVoice) speech.voice = utteranceVoice;
+            const voices = speechSynthesis.getVoices();
+            utterance.voice = voices.find(voice => voice.lang === 'en-US') || voices[0];
 
-            const speechSynthesisUtterance = new SpeechSynthesisUtterance(text);
-            const utteranceAudioSource = audioContext.createMediaStreamSource(mediaStreamDestination.stream);
+            const sampleRate = 44100;
+            const offlineContext = new OfflineAudioContext(1, sampleRate * 10, sampleRate);
 
-            mediaRecorder = new MediaRecorder(mediaStreamDestination.stream);
-            audioChunks = [];
+            const source = offlineContext.createBufferSource();
+            const mediaStreamDestination = offlineContext.createMediaStreamDestination();
 
-            mediaRecorder.ondataavailable = event => {
-                if (event.data.size > 0) {
-                    audioChunks.push(event.data);
-                }
+            source.connect(mediaStreamDestination);
+            source.connect(offlineContext.destination);
+
+            utterance.onstart = () => {
+                console.log("Speech started...");
             };
 
-            mediaRecorder.onstop = () => {
-                audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            utterance.onend = async () => {
+                console.log("Speech ended, recording...");
+
+                const audioBuffer = await offlineContext.startRendering();
+                const wavBlob = bufferToWave(audioBuffer, audioBuffer.length);
+                audioBlob = new Blob([wavBlob], { type: 'audio/wav' });
+
                 document.getElementById('download-button').style.display = 'inline';
             };
 
-            utteranceAudioSource.connect(audioContext.destination);
-            utteranceAudioSource.connect(mediaStreamDestination);
+            window.speechSynthesis.speak(utterance);
+        }
 
-            speech.onstart = () => {
-                mediaRecorder.start();
-            };
+        function bufferToWave(abuffer, len) {
+            let numOfChan = abuffer.numberOfChannels;
+            let length = len * numOfChan * 2 + 44;
+            let buffer = new ArrayBuffer(length);
+            let view = new DataView(buffer);
+            let channels = [], i, sample, offset = 0, pos = 0;
 
-            speech.onend = () => {
-                mediaRecorder.stop();
-            };
+            setUint32(0x46464952); // "RIFF"
+            setUint32(length - 8); // file length
+            setUint32(0x45564157); // "WAVE"
 
-            window.speechSynthesis.speak(speech);
+            setUint32(0x20746d66); // "fmt " chunk
+            setUint32(16);         // length = 16
+            setUint16(1);          // PCM (uncompressed)
+            setUint16(numOfChan);
+            setUint32(abuffer.sampleRate);
+            setUint32(abuffer.sampleRate * 2 * numOfChan);
+            setUint16(numOfChan * 2);
+            setUint16(16);         // bits per sample
+
+            setUint32(0x64617461); // "data" - chunk
+            setUint32(length - pos - 4);
+
+            for (i = 0; i < abuffer.numberOfChannels; i++)
+                channels.push(abuffer.getChannelData(i));
+
+            while (pos < length) {
+                for (i = 0; i < numOfChan; i++) {
+                    sample = Math.max(-1, Math.min(1, channels[i][offset])); 
+                    sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF; 
+                    view.setInt16(pos, sample, true); 
+                    pos += 2;
+                }
+                offset++;
+            }
+
+            return buffer;
+
+            function setUint16(data) {
+                view.setUint16(pos, data, true);
+                pos += 2;
+            }
+
+            function setUint32(data) {
+                view.setUint32(pos, data, true);
+                pos += 4;
+            }
         }
 
         document.getElementById('download-button').addEventListener('click', () => {
             const url = URL.createObjectURL(audioBlob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'speech-recording.webm';
+            a.download = 'speech-recording.wav';
             a.click();
         });
     </script>
